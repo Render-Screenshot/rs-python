@@ -81,8 +81,16 @@ class TestBatchDocs:
                 "completed": 3,
                 "failed": 0,
                 "results": [
-                    {"url": "https://github.com", "success": True, "response": {"url": "https://cdn.example.com/1.png"}},
-                    {"url": "https://stripe.com", "success": True, "response": {"url": "https://cdn.example.com/2.png"}},
+                    {
+                        "url": "https://github.com",
+                        "success": True,
+                        "response": {"url": "https://cdn.example.com/1.png"},
+                    },
+                    {
+                        "url": "https://stripe.com",
+                        "success": True,
+                        "response": {"url": "https://cdn.example.com/2.png"},
+                    },
                     {
                         "url": "https://linear.app",
                         "success": True,
@@ -237,7 +245,9 @@ class TestBlockingDocs:
         client = Client("rs_live_xxxxx")
 
         image = client.take(
-            TakeOptions.url("https://docs.example.com").block_urls(["*feedback-widget*", "*announcement-banner*"])
+            TakeOptions.url("https://docs.example.com").block_urls(
+                ["*feedback-widget*", "*announcement-banner*"]
+            )
         )
 
         assert isinstance(image, bytes)
@@ -254,7 +264,8 @@ class TestSignedUrlsDocs:
 
         # Generate a signed URL that expires in 24 hours
         signed_url = client.generate_url(
-            TakeOptions.url("https://example.com").preset("og_card"), datetime.now() + timedelta(hours=24)
+            TakeOptions.url("https://example.com").preset("og_card"),
+            datetime.now() + timedelta(hours=24),
         )
 
         # Use in HTML: <img src="{signed_url}" />
@@ -277,7 +288,9 @@ class TestSdkIndexDocs:
         client = Client("rs_live_xxxxx")
 
         # Take a screenshot with chained options
-        image = client.take(TakeOptions.url("https://example.com").preset("og_card").block_ads().dark_mode())
+        image = client.take(
+            TakeOptions.url("https://example.com").preset("og_card").block_ads().dark_mode()
+        )
 
         assert isinstance(image, bytes)
         client.close()

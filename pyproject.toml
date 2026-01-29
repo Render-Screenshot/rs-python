@@ -45,20 +45,21 @@ dependencies = [
 [project.urls]
 Homepage = "https://renderscreenshot.com"
 Documentation = "https://renderscreenshot.com/docs"
-Repository = "https://github.com/renderscreenshot/rs-python"
-Issues = "https://github.com/renderscreenshot/rs-python/issues"
-Changelog = "https://github.com/renderscreenshot/rs-python/blob/main/CHANGELOG.md"
+Repository = "https://github.com/Render-Screenshot/rs-python"
+Issues = "https://github.com/Render-Screenshot/rs-python/issues"
+Changelog = "https://github.com/Render-Screenshot/rs-python/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
-    "pytest-httpx>=0.30.0",
+    "pytest-httpx>=0.21.0",
     "pytest-cov>=4.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
     "pip-audit>=2.6.0",
     "bandit>=1.7.0",
     "pre-commit>=3.0",
+    "detect-secrets>=1.4.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -126,3 +127,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]  # Allow assert in tests
