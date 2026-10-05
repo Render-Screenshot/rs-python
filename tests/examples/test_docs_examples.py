@@ -78,23 +78,37 @@ class TestBatchDocs:
                 "id": "batch_123",
                 "status": "completed",
                 "total": 3,
-                "completed": 3,
-                "failed": 0,
+                "completed": 2,
+                "failed": 1,
                 "results": [
                     {
+                        "position": 0,
                         "url": "https://github.com",
-                        "success": True,
-                        "response": {"url": "https://cdn.example.com/1.png"},
+                        "status": "completed",
+                        "image": {
+                            "image_url": "https://cdn.example.com/1.png",
+                            "width": 1200,
+                            "height": 630,
+                        },
+                        "error": None,
                     },
                     {
+                        "position": 1,
                         "url": "https://stripe.com",
-                        "success": True,
-                        "response": {"url": "https://cdn.example.com/2.png"},
+                        "status": "completed",
+                        "image": {
+                            "image_url": "https://cdn.example.com/2.png",
+                            "width": 1200,
+                            "height": 630,
+                        },
+                        "error": None,
                     },
                     {
+                        "position": 2,
                         "url": "https://linear.app",
-                        "success": True,
-                        "response": {"url": "https://cdn.example.com/3.png"},
+                        "status": "failed",
+                        "image": None,
+                        "error": "Page failed to load within 30 seconds",
                     },
                 ],
             }
@@ -109,11 +123,18 @@ class TestBatchDocs:
         )
 
         print(f"Completed: {results['completed']}/{results['total']}")
+        urls = {}
         for item in results["results"]:
-            url = item.get("response", {}).get("url", "failed") if item.get("success") else "failed"
+            url = item["image"]["image_url"] if item["status"] == "completed" else "failed"
             print(f"{item['url']}: {url}")
+            urls[item["url"]] = url
 
-        assert results["completed"] == 3
+        assert results["completed"] == 2
+        assert urls == {
+            "https://github.com": "https://cdn.example.com/1.png",
+            "https://stripe.com": "https://cdn.example.com/2.png",
+            "https://linear.app": "failed",
+        }
         client.close()
 
     def test_advanced_batch(self, httpx_mock):

@@ -208,6 +208,55 @@ class TestClientBatch:
         assert result["id"] == "batch_123"
         client.close()
 
+    def test_batch_parses_completed_and_failed_items(self, httpx_mock):
+        """Test batch results use the API's status/image/error item shape."""
+        httpx_mock.add_response(
+            method="POST",
+            url="https://api.renderscreenshot.com/v1/batch",
+            json={
+                "id": "batch_123",
+                "status": "completed",
+                "total": 2,
+                "completed": 1,
+                "failed": 1,
+                "results": [
+                    {
+                        "position": 0,
+                        "url": "https://example1.com",
+                        "status": "completed",
+                        "image": {
+                            "image_url": "https://cdn.example.com/1.png",
+                            "width": 1200,
+                            "height": 630,
+                        },
+                        "error": None,
+                    },
+                    {
+                        "position": 1,
+                        "url": "https://broken.example",
+                        "status": "failed",
+                        "image": None,
+                        "error": "Page failed to load",
+                    },
+                ],
+                "usage": {"credits": 1, "remaining": 99},
+            },
+        )
+
+        client = Client("rs_live_test123")
+        result = client.batch(["https://example1.com", "https://broken.example"])
+
+        ok, bad = result["results"]
+        assert ok["status"] == "completed"
+        assert ok["image"]["image_url"] == "https://cdn.example.com/1.png"
+        assert ok["error"] is None
+        assert bad["status"] == "failed"
+        assert bad["image"] is None
+        assert bad["error"] == "Page failed to load"
+        assert result["completed"] == 1
+        assert result["failed"] == 1
+        client.close()
+
 
 class TestClientGetBatch:
     """Tests for get_batch method with mocked HTTP."""
@@ -221,8 +270,18 @@ class TestClientGetBatch:
             "completed": 2,
             "failed": 0,
             "results": [
-                {"url": "https://example1.com", "success": True},
-                {"url": "https://example2.com", "success": True},
+                {
+                    "url": "https://example1.com",
+                    "status": "completed",
+                    "image": {"image_url": "https://cdn.example.com/a.png"},
+                    "error": None,
+                },
+                {
+                    "url": "https://example2.com",
+                    "status": "completed",
+                    "image": {"image_url": "https://cdn.example.com/a.png"},
+                    "error": None,
+                },
             ],
         }
         httpx_mock.add_response(json=response_data)

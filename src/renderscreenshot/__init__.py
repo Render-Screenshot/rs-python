@@ -27,6 +27,8 @@ from .client import Client
 from .errors import RenderScreenshotError
 from .options import TakeOptions
 from .types import (
+    BatchImage,
+    BatchItemStatus,
     BatchRequestItem,
     BatchResponse,
     BatchResponseItem,
@@ -54,6 +56,8 @@ from .webhooks import extract_webhook_headers, parse_webhook, verify_webhook
 __version__ = "1.0.0"
 
 __all__ = [
+    "BatchImage",
+    "BatchItemStatus",
     "BatchRequestItem",
     "BatchResponse",
     "BatchResponseItem",

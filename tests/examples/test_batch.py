@@ -16,9 +16,24 @@ class TestBatchExamples:
                 "completed": 3,
                 "failed": 0,
                 "results": [
-                    {"url": "https://example1.com", "success": True},
-                    {"url": "https://example2.com", "success": True},
-                    {"url": "https://example3.com", "success": True},
+                    {
+                        "url": "https://example1.com",
+                        "status": "completed",
+                        "image": {"image_url": "https://cdn.example.com/a.png"},
+                        "error": None,
+                    },
+                    {
+                        "url": "https://example2.com",
+                        "status": "completed",
+                        "image": {"image_url": "https://cdn.example.com/a.png"},
+                        "error": None,
+                    },
+                    {
+                        "url": "https://example3.com",
+                        "status": "completed",
+                        "image": {"image_url": "https://cdn.example.com/a.png"},
+                        "error": None,
+                    },
                 ],
             }
         )

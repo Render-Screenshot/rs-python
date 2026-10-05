@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, TypedDict, Union
+from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
 
 # Screenshot format options
 ImageFormat = Literal["png", "jpeg", "webp", "pdf"]
@@ -198,35 +198,74 @@ class BatchRequestItem(TypedDict, total=False):
     options: TakeOptionsConfig
 
 
+# Batch status types
+BatchStatus = Literal["pending", "processing", "completed", "failed"]
+
+# Batch item status types (as returned in batch results)
+BatchItemStatus = Literal["pending", "processing", "completed", "failed"]
+
+
 class BatchError(TypedDict):
-    """Error in a batch response item."""
+    """Error details in a webhook event."""
 
     code: str
     message: str
 
 
+class BatchImage(TypedDict, total=False):
+    """Screenshot details for a completed batch item."""
+
+    image_url: str
+    width: int
+    height: int
+    size: int
+    format: str
+
+
 class BatchResponseItem(TypedDict, total=False):
-    """Batch response item."""
+    """Batch response item.
 
+    ``image`` is set when ``status`` is ``"completed"``.
+    ``error`` is a message string when ``status`` is ``"failed"``.
+    """
+
+    position: int
     url: str
-    success: bool
-    response: ScreenshotResponse
-    error: BatchError
+    status: BatchItemStatus
+    image: Optional[BatchImage]
+    error: Optional[str]
+    response_time_ms: Optional[int]
 
 
-# Batch status types
-BatchStatus = Literal["pending", "processing", "completed", "failed"]
+class BatchUsage(TypedDict):
+    """Credit usage for a batch."""
+
+    credits: int
+    remaining: int
 
 
-class BatchResponse(TypedDict):
-    """Batch response."""
-
+class _BatchResponseRequired(TypedDict):
     id: str
     status: BatchStatus
     total: int
+
+
+class BatchResponse(_BatchResponseRequired, total=False):
+    """Batch response.
+
+    Counts are top-level fields. ``results`` and ``usage`` are present once
+    the batch has finished; ``progress`` is present while it is running.
+    """
+
     completed: int
     failed: int
+    progress: float
+    message: str
+    credits_used: int
+    started_at: Optional[str]
+    completed_at: Optional[str]
     results: List[BatchResponseItem]
+    usage: BatchUsage
 
 
 class CacheEntry(TypedDict):
