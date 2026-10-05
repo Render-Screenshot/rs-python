@@ -2,16 +2,16 @@
 
 Official Python SDK for [RenderScreenshot](https://renderscreenshot.com) - Screenshot API for developers.
 
-[![PyPI version](https://badge.fury.io/py/renderscreenshot.svg)](https://pypi.org/project/renderscreenshot/)
-[![Python versions](https://img.shields.io/pypi/pyversions/renderscreenshot.svg)](https://pypi.org/project/renderscreenshot/)
-[![CI](https://github.com/renderscreenshot/rs-python/actions/workflows/ci.yml/badge.svg)](https://github.com/renderscreenshot/rs-python/actions/workflows/ci.yml)
+[![CI](https://github.com/Render-Screenshot/rs-python/actions/workflows/ci.yml/badge.svg)](https://github.com/Render-Screenshot/rs-python/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Installation
 
 ```bash
-pip install renderscreenshot
+pip install git+https://github.com/Render-Screenshot/rs-python.git
 ```
+
+The package is not on PyPI yet. Until it is, install it from GitHub.
 
 ## Quick Start
 
@@ -344,5 +344,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - [Documentation](https://renderscreenshot.com/docs)
 - [API Reference](https://renderscreenshot.com/docs/api)
-- [GitHub](https://github.com/renderscreenshot/rs-python)
-- [PyPI](https://pypi.org/project/renderscreenshot/)
+- [GitHub](https://github.com/Render-Screenshot/rs-python)
