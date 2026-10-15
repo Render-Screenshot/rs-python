@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    { name = "Michael Brooks", email = "michael@renderscreenshot.com" }
+    { name = "Simon Chiu", email = "simon@renderscreenshot.com" }
 ]
 keywords = [
     "screenshot",
