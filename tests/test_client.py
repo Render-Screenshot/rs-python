@@ -1,5 +1,6 @@
 """Tests for the Client class."""
 
+import json
 from datetime import datetime, timedelta
 
 import pytest
@@ -40,32 +41,117 @@ class TestClientInitialization:
             assert client is not None
 
 
+SIGN_KEY = "rs_secret_vector456"
+PUB_KEY = "rs_pub_vector123"
+VECTOR_EXPIRES = 1893456000
+
+
+def _signing_client():
+    return Client("rs_live_test123", signing_key=SIGN_KEY, public_key_id=PUB_KEY)
+
+
 class TestClientGenerateUrl:
     """Tests for generate_url method."""
 
-    def test_generate_url_basic(self):
-        """Test basic signed URL generation."""
+    def test_cross_sdk_vector_v1(self):
+        """Signed URL matches the Rails/rs-ruby reference vector V1 exactly."""
+        client = _signing_client()
+        options = (
+            TakeOptions.url("https://example.com/path?a=1&b=two words")
+            .width(1200)
+            .height(630)
+            .format("png")
+            .full_page()
+        )
+
+        url = client.generate_url(options, VECTOR_EXPIRES)
+
+        assert url == (
+            "https://api.renderscreenshot.com/v1/screenshot?expires=1893456000&format=png"
+            "&full_page=true&height=630&key_id=rs_pub_vector123"
+            "&url=https%3A%2F%2Fexample.com%2Fpath%3Fa%3D1%26b%3Dtwo+words&width=1200"
+            "&signature=ff30f019a228e751b71f4bdca8c5341c33eaac0985a18426882525de00ba329a"
+        )
+        client.close()
+
+    def test_cross_sdk_vector_v2(self):
+        """Signed URL matches the Rails/rs-ruby reference vector V2 exactly."""
+        client = _signing_client()
+        options = TakeOptions.url("https://example.com/caf\u00e9?q=a b&x=~*()!'").width(1200)
+
+        url = client.generate_url(options, VECTOR_EXPIRES)
+
+        assert url == (
+            "https://api.renderscreenshot.com/v1/screenshot?expires=1893456000"
+            "&key_id=rs_pub_vector123"
+            "&url=https%3A%2F%2Fexample.com%2Fcaf%C3%A9%3Fq%3Da+b%26x%3D~%2A%28%29%21%27"
+            "&width=1200"
+            "&signature=8c53d62d192cd5423ea612eb08bbe2df25e22ee89b8f52634be4b8f0812a0e14"
+        )
+        client.close()
+
+    def test_accepts_datetime_expiry(self):
+        """A datetime expiry becomes its Unix timestamp."""
+        client = _signing_client()
+        expires = datetime.fromtimestamp(VECTOR_EXPIRES)
+
+        url = client.generate_url(TakeOptions.url("https://example.com"), expires)
+
+        assert "expires=1893456000" in url
+        client.close()
+
+    def test_per_call_credentials_override(self):
+        """Signing credentials passed to generate_url override the client's."""
         client = Client("rs_live_test123")
-        options = TakeOptions.url("https://example.com")
-        expires = datetime.now() + timedelta(hours=1)
+        options = (
+            TakeOptions.url("https://example.com/path?a=1&b=two words")
+            .width(1200)
+            .height(630)
+            .format("png")
+            .full_page()
+        )
 
-        url = client.generate_url(options, expires)
+        url = client.generate_url(
+            options, VECTOR_EXPIRES, signing_key=SIGN_KEY, public_key_id=PUB_KEY
+        )
 
-        assert "https://api.renderscreenshot.com" in url
-        assert "url=https" in url
-        assert "expires=" in url
-        assert "signature=" in url
+        assert url.endswith(
+            "signature=ff30f019a228e751b71f4bdca8c5341c33eaac0985a18426882525de00ba329a"
+        )
+        client.close()
+
+    def test_requires_signing_credentials(self):
+        """generate_url raises a validation error without rs_secret_/rs_pub_ keys."""
+        client = Client("rs_live_test123")
+        with pytest.raises(RenderScreenshotError) as exc:
+            client.generate_url(TakeOptions.url("https://example.com"), VECTOR_EXPIRES)
+        assert exc.value.code == "invalid_request"
+
+        only_secret = Client("rs_live_test123", signing_key=SIGN_KEY)
+        with pytest.raises(RenderScreenshotError):
+            only_secret.generate_url(TakeOptions.url("https://example.com"), VECTOR_EXPIRES)
+        client.close()
+        only_secret.close()
+
+    def test_does_not_sign_with_api_key(self):
+        """The live API key never appears in the signed URL."""
+        client = _signing_client()
+        url = client.generate_url(TakeOptions.url("https://example.com"), VECTOR_EXPIRES)
+        assert "rs_live_" not in url
+        assert "rs_secret_" not in url
         client.close()
 
     def test_generate_url_with_options(self):
-        """Test signed URL with multiple options."""
-        client = Client("rs_live_test123")
+        """Test signed URL with multiple options uses GET query names."""
+        client = _signing_client()
         options = (
             TakeOptions.url("https://example.com")
             .width(1200)
             .height(630)
             .preset("og_card")
             .block_ads()
+            .block_cookie_banners()
+            .element("#main")
         )
         expires = datetime.now() + timedelta(hours=24)
 
@@ -75,15 +161,16 @@ class TestClientGenerateUrl:
         assert "height=630" in url
         assert "preset=og_card" in url
         assert "block_ads=true" in url
+        assert "block_cookies=true" in url
+        assert "selector=%23main" in url
         client.close()
 
     def test_generate_url_with_dict(self):
         """Test signed URL generation with dict config."""
-        client = Client("rs_live_test123")
+        client = _signing_client()
         config = {"url": "https://example.com", "width": 1200}
-        expires = datetime.now() + timedelta(hours=1)
 
-        url = client.generate_url(config, expires)
+        url = client.generate_url(config, VECTOR_EXPIRES)
 
         assert "url=https" in url
         assert "width=1200" in url
@@ -91,18 +178,15 @@ class TestClientGenerateUrl:
 
     def test_generate_url_sorted_params(self):
         """Test that URL parameters are sorted alphabetically."""
-        client = Client("rs_live_test123")
+        client = _signing_client()
         options = TakeOptions.url("https://example.com").width(1200).block_ads()
-        expires = datetime.now() + timedelta(hours=1)
 
-        url = client.generate_url(options, expires)
+        url = client.generate_url(options, VECTOR_EXPIRES)
 
-        # block_ads should come before url, width
-        block_idx = url.index("block_ads")
-        url_idx = url.index("url=")
-        width_idx = url.index("width=")
-
-        assert block_idx < url_idx < width_idx
+        query = url.split("?", 1)[1].rsplit("&signature=", 1)[0]
+        keys = [pair.split("=", 1)[0] for pair in query.split("&")]
+        assert keys == sorted(keys)
+        assert keys == ["block_ads", "expires", "key_id", "url", "width"]
         client.close()
 
 
@@ -124,6 +208,39 @@ class TestClientTake:
         assert "/screenshot" in str(request.url)
         client.close()
 
+    def test_take_sends_nested_json(self, httpx_mock):
+        """take() POSTs the nested JSON shape the API expects."""
+        httpx_mock.add_response(content=b"img")
+
+        client = Client("rs_live_test123")
+        options = (
+            TakeOptions.url("https://example.com")
+            .width(1200)
+            .height(630)
+            .full_page()
+            .element("#main")
+            .format("jpeg")
+            .quality(85)
+            .wait_for_selector("#ready")
+            .block_ads()
+            .dark_mode()
+        )
+        client.take(options)
+
+        request = httpx_mock.get_request()
+        assert json.loads(request.content) == {
+            "url": "https://example.com",
+            "viewport": {"width": 1200, "height": 630},
+            "capture": {"mode": "full_page", "selector": "#main"},
+            "output": {"format": "jpeg", "quality": 85},
+            "wait": {"for_selector": "#ready"},
+            "block": {"ads": True},
+            "browser": {"dark_mode": True},
+        }
+        assert request.headers["Authorization"] == "Bearer rs_live_test123"
+        assert request.headers.get("Accept") != "application/json"
+        client.close()
+
     def test_take_accepts_dict(self, httpx_mock):
         """Test that take accepts dict config."""
         httpx_mock.add_response(content=b"fake image data")
@@ -142,14 +259,22 @@ class TestClientTakeJson:
 
     def test_take_json_returns_metadata(self, httpx_mock):
         """Test that take_json returns metadata."""
-        response_data = {
-            "url": "https://cdn.example.com/screenshot.png",
-            "width": 1200,
-            "height": 630,
-            "format": "png",
-            "size": 12345,
-            "cached": False,
-        }
+        # Real body built by ApiResponseBuilder.success_response
+        response_data = json.loads(
+            """
+            {
+              "id": "req_ab12cd34ef56ab78",
+              "status": "completed",
+              "image": {"url": "https://cdn.example.com/screenshot.png", "width": 1200,
+                        "height": 630, "size": 12345, "format": "png"},
+              "metadata": {"title": "Screenshot"},
+              "cache": {"hit": true, "key": "screenshots/abc.png",
+                        "url": "https://cdn.example.com/screenshot.png",
+                        "expires_at": "2026-10-19T12:00:00Z"},
+              "usage": {"credits": 1, "remaining": 99}
+            }
+            """
+        )
         httpx_mock.add_response(json=response_data)
 
         client = Client("rs_live_test123")
@@ -157,9 +282,55 @@ class TestClientTakeJson:
 
         result = client.take_json(options)
 
-        assert result["url"] == "https://cdn.example.com/screenshot.png"
-        assert result["width"] == 1200
-        assert result["height"] == 630
+        assert result["id"] == "req_ab12cd34ef56ab78"
+        assert result["status"] == "completed"
+        assert result["image"] == {
+            "url": "https://cdn.example.com/screenshot.png",
+            "width": 1200,
+            "height": 630,
+            "size": 12345,
+            "format": "png",
+        }
+        assert result["cache"]["hit"] is True
+        assert result["cache"]["key"] == "screenshots/abc.png"
+        assert result["cache"]["url"] == "https://cdn.example.com/screenshot.png"
+        assert result["cache"]["expires_at"] == "2026-10-19T12:00:00Z"
+        assert result["usage"] == {"credits": 1, "remaining": 99}
+        client.close()
+
+    def test_take_json_webhook_accepted(self, httpx_mock):
+        """A webhook request returns 202 with a job id and processing status."""
+        httpx_mock.add_response(
+            status_code=202,
+            json={
+                "id": "job_123",
+                "status": "processing",
+                "webhook": {"url": "https://hooks.example.com/rs"},
+            },
+        )
+
+        client = Client("rs_live_test123")
+        result = client.take_json(TakeOptions.url("https://example.com"))
+
+        assert result["id"] == "job_123"
+        assert result["status"] == "processing"
+        assert "image" not in result
+        client.close()
+
+    def test_take_json_sends_accept_header(self, httpx_mock):
+        """take_json() asks for JSON with the Accept header and nested body."""
+        httpx_mock.add_response(json={"url": "https://cdn.example.com/x.png"})
+
+        client = Client("rs_live_test123")
+        client.take_json(TakeOptions.url("https://example.com").width(800).format("png"))
+
+        request = httpx_mock.get_request()
+        assert request.headers["Accept"] == "application/json"
+        assert json.loads(request.content) == {
+            "url": "https://example.com",
+            "viewport": {"width": 800},
+            "output": {"format": "png"},
+        }
         client.close()
 
 
@@ -203,9 +374,39 @@ class TestClientBatch:
         urls = ["https://example1.com", "https://example2.com"]
         options = TakeOptions.url("").preset("og_card")
 
-        result = client.batch(urls, options)
+        result = client.batch(urls, options.width(1200).full_page())
 
         assert result["id"] == "batch_123"
+        body = json.loads(httpx_mock.get_request().content)
+        assert body == {
+            "urls": urls,
+            "options": {
+                "preset": "og_card",
+                "viewport": {"width": 1200},
+                "capture": {"mode": "full_page"},
+            },
+        }
+        client.close()
+
+    def test_batch_with_request_items_sends_nested_options(self, httpx_mock):
+        """Per-URL batch requests use the nested option shape."""
+        httpx_mock.add_response(json={"id": "batch_9", "status": "processing"})
+
+        client = Client("rs_live_test123")
+        client.batch(
+            [
+                {"url": "https://a.com", "options": {"width": 1200, "format": "webp"}},
+                {"url": "https://b.com", "options": {"preset": "full_page"}},
+            ]
+        )
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert body == {
+            "requests": [
+                {"url": "https://a.com", "viewport": {"width": 1200}, "output": {"format": "webp"}},
+                {"url": "https://b.com", "preset": "full_page"},
+            ]
+        }
         client.close()
 
     def test_batch_parses_completed_and_failed_items(self, httpx_mock):

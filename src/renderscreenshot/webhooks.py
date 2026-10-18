@@ -10,10 +10,10 @@ from datetime import datetime
 from typing import Any, Dict, Mapping, Tuple, Union
 
 from .types import (
-    ScreenshotResponse,
     WebhookEvent,
     WebhookEventData,
     WebhookEventType,
+    WebhookScreenshot,
 )
 
 
@@ -113,14 +113,15 @@ def parse_webhook(payload: Union[str, Dict[str, Any]]) -> WebhookEvent:
     except (ValueError, AttributeError):
         timestamp = datetime.now()
 
-    event_type: WebhookEventType = raw.get("event", "screenshot.completed")
+    # The payload names the event type in its `event` field
+    event_type: WebhookEventType = raw.get("event") or raw.get("type") or "screenshot.completed"
     event_data: WebhookEventData = {}
 
     # Parse based on event type
     data = raw.get("data", {})
 
     if event_type == "screenshot.completed":
-        response: ScreenshotResponse = {
+        response: WebhookScreenshot = {
             "url": data.get("screenshot_url", ""),
             "width": data.get("width", 0),
             "height": data.get("height", 0),
@@ -134,14 +135,21 @@ def parse_webhook(payload: Union[str, Dict[str, Any]]) -> WebhookEvent:
 
     elif event_type == "screenshot.failed":
         event_data["error"] = {
-            "code": "render_failed",
-            "message": data.get("error", "Unknown error"),
+            "code": data.get("error_code") or "render_failed",
+            "message": data.get("error") or "Unknown error",
         }
         if "url" in data:
             event_data["url"] = data["url"]
 
     elif event_type in ("batch.completed", "batch.failed"):
         event_data["batch_id"] = raw.get("id", "")
+        if isinstance(data.get("summary"), dict):
+            event_data["summary"] = data["summary"]
+        if "results_url" in data:
+            event_data["results_url"] = data["results_url"]
+
+    # Keep the original data object for fields the SDK does not model
+    event_data["raw"] = data
 
     event: WebhookEvent = {
         "id": raw.get("id", ""),

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "renderscreenshot"
-version = "1.0.0"
+version = "1.0.1"
 description = "Official Python SDK for RenderScreenshot - Screenshot API for developers"
 readme = "README.md"
 license = "MIT"

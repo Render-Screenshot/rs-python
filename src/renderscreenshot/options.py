@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
+from urllib.parse import quote_plus
 
 from .types import (
     BlockableResource,
@@ -221,10 +221,10 @@ class TakeOptions:
         return self._copy_with(wait_for_selector=selector)
 
     def wait_for_timeout(self, value: int) -> "TakeOptions":
-        """Maximum wait time in milliseconds.
+        """Maximum wait time in seconds.
 
         Args:
-            value: Timeout in milliseconds.
+            value: Timeout in seconds (the API clamps it to 1-60).
 
         Returns:
             A new TakeOptions instance.
@@ -777,158 +777,162 @@ class TakeOptions:
     def to_params(self) -> Dict[str, Any]:
         """Convert to API request parameters (for POST body).
 
-        This method converts the configuration to the nested format
-        expected by the API.
+        This method converts the configuration to the nested JSON format
+        expected by ``POST /v1/screenshot`` (for example ``viewport.width``,
+        ``capture.mode``, ``output.format``, ``wait.for_selector``).
 
         Returns:
             Dictionary suitable for JSON POST body.
         """
         params: Dict[str, Any] = {}
-        config = self._config
+        config: Dict[str, Any] = self._config  # type: ignore[assignment]
 
-        # Target
-        if "url" in config:
-            params["url"] = config["url"]
-        if "html" in config:
-            params["html"] = config["html"]
+        # Top-level params
+        for key in ("url", "html", "preset", "device"):
+            if key in config:
+                params[key] = config[key]
 
-        # Viewport (nested)
+        # Viewport
         viewport: Dict[str, Any] = {}
-        if "width" in config:
-            viewport["width"] = config["width"]
-        if "height" in config:
-            viewport["height"] = config["height"]
-        if "scale" in config:
-            viewport["scale"] = config["scale"]
-        if "mobile" in config:
-            viewport["mobile"] = config["mobile"]
+        for key in ("width", "height", "scale", "mobile"):
+            if key in config:
+                viewport[key] = config[key]
         if viewport:
             params["viewport"] = viewport
 
         # Capture
-        if "full_page" in config:
-            params["full_page"] = config["full_page"]
-        if "element" in config:
-            params["element"] = config["element"]
+        capture: Dict[str, Any] = {}
+        if config.get("full_page"):
+            capture["mode"] = "full_page"
+        if config.get("element"):
+            capture["selector"] = config["element"]
+        if capture:
+            params["capture"] = capture
+
+        # Output
+        output: Dict[str, Any] = {}
         if "format" in config:
-            params["format"] = config["format"]
+            output["format"] = config["format"]
         if "quality" in config:
-            params["quality"] = config["quality"]
+            output["quality"] = config["quality"]
+        if output:
+            params["output"] = output
 
         # Wait
+        wait: Dict[str, Any] = {}
         if "wait_for" in config:
-            params["wait_for"] = config["wait_for"]
+            wait["until"] = config["wait_for"]
         if "delay" in config:
-            params["delay"] = config["delay"]
+            wait["delay"] = config["delay"]
         if "wait_for_selector" in config:
-            params["wait_for_selector"] = config["wait_for_selector"]
+            wait["for_selector"] = config["wait_for_selector"]
         if "wait_for_timeout" in config:
-            params["wait_for_timeout"] = config["wait_for_timeout"]
+            wait["timeout"] = config["wait_for_timeout"]
+        if wait:
+            params["wait"] = wait
 
-        # Presets
-        if "preset" in config:
-            params["preset"] = config["preset"]
-        if "device" in config:
-            params["device"] = config["device"]
-
-        # Blocking
+        # Block
+        block: Dict[str, Any] = {}
         if "block_ads" in config:
-            params["block_ads"] = config["block_ads"]
+            block["ads"] = config["block_ads"]
         if "block_trackers" in config:
-            params["block_trackers"] = config["block_trackers"]
+            block["trackers"] = config["block_trackers"]
         if "block_cookie_banners" in config:
-            params["block_cookie_banners"] = config["block_cookie_banners"]
+            block["cookie_banners"] = config["block_cookie_banners"]
         if "block_chat_widgets" in config:
-            params["block_chat_widgets"] = config["block_chat_widgets"]
+            block["chat_widgets"] = config["block_chat_widgets"]
         if "block_urls" in config:
-            params["block_urls"] = config["block_urls"]
+            block["requests"] = config["block_urls"]
         if "block_resources" in config:
-            params["block_resources"] = config["block_resources"]
+            block["resources"] = config["block_resources"]
+        if block:
+            params["block"] = block
 
-        # Page manipulation
+        # Page
+        page: Dict[str, Any] = {}
         if "inject_script" in config:
-            params["inject_script"] = config["inject_script"]
+            page["scripts"] = [config["inject_script"]]
         if "inject_style" in config:
-            params["inject_style"] = config["inject_style"]
+            page["styles"] = [config["inject_style"]]
         if "click" in config:
-            params["click"] = config["click"]
+            page["click"] = config["click"]
         if "hide" in config:
-            params["hide"] = config["hide"]
+            page["hide"] = config["hide"]
         if "remove" in config:
-            params["remove"] = config["remove"]
+            page["remove"] = config["remove"]
+        if page:
+            params["page"] = page
 
-        # Browser emulation
+        # Browser
+        browser: Dict[str, Any] = {}
         if "dark_mode" in config:
-            params["dark_mode"] = config["dark_mode"]
+            browser["dark_mode"] = config["dark_mode"]
         if "reduced_motion" in config:
-            params["reduced_motion"] = config["reduced_motion"]
+            browser["reduced_motion"] = config["reduced_motion"]
         if "media_type" in config:
-            params["media_type"] = config["media_type"]
+            browser["media"] = config["media_type"]
         if "user_agent" in config:
-            params["user_agent"] = config["user_agent"]
+            browser["user_agent"] = config["user_agent"]
         if "timezone" in config:
-            params["timezone"] = config["timezone"]
+            browser["timezone"] = config["timezone"]
         if "locale" in config:
-            params["locale"] = config["locale"]
+            browser["locale"] = config["locale"]
         if "geolocation" in config:
-            params["geolocation"] = config["geolocation"]
+            browser["geolocation"] = config["geolocation"]
+        if browser:
+            params["browser"] = browser
 
         # Network
+        network: Dict[str, Any] = {}
         if "headers" in config:
-            params["headers"] = config["headers"]
+            network["headers"] = config["headers"]
         if "cookies" in config:
-            params["cookies"] = config["cookies"]
-        if "auth_basic" in config:
-            params["auth_basic"] = config["auth_basic"]
-        if "auth_bearer" in config:
-            params["auth_bearer"] = config["auth_bearer"]
+            network["cookies"] = config["cookies"]
         if "bypass_csp" in config:
-            params["bypass_csp"] = config["bypass_csp"]
+            network["bypass_csp"] = config["bypass_csp"]
+        if "auth_basic" in config:
+            network["auth"] = {"type": "basic", **config["auth_basic"]}
+        elif "auth_bearer" in config:
+            network["auth"] = {"type": "bearer", "token": config["auth_bearer"]}
+        if network:
+            params["network"] = network
 
         # Cache
+        cache: Dict[str, Any] = {}
         if "cache_ttl" in config:
-            params["cache_ttl"] = config["cache_ttl"]
+            cache["ttl"] = config["cache_ttl"]
         if "cache_refresh" in config:
-            params["cache_refresh"] = config["cache_refresh"]
+            cache["refresh"] = config["cache_refresh"]
+        if cache:
+            params["cache"] = cache
 
-        # PDF (nested)
+        # PDF
         pdf: Dict[str, Any] = {}
-        if "pdf_paper_size" in config:
-            pdf["paper_size"] = config["pdf_paper_size"]
-        if "pdf_width" in config:
-            pdf["width"] = config["pdf_width"]
-        if "pdf_height" in config:
-            pdf["height"] = config["pdf_height"]
-        if "pdf_landscape" in config:
-            pdf["landscape"] = config["pdf_landscape"]
-        if "pdf_margin" in config:
-            pdf["margin"] = config["pdf_margin"]
-        if "pdf_margin_top" in config:
-            pdf["margin_top"] = config["pdf_margin_top"]
-        if "pdf_margin_right" in config:
-            pdf["margin_right"] = config["pdf_margin_right"]
-        if "pdf_margin_bottom" in config:
-            pdf["margin_bottom"] = config["pdf_margin_bottom"]
-        if "pdf_margin_left" in config:
-            pdf["margin_left"] = config["pdf_margin_left"]
-        if "pdf_scale" in config:
-            pdf["scale"] = config["pdf_scale"]
-        if "pdf_print_background" in config:
-            pdf["print_background"] = config["pdf_print_background"]
-        if "pdf_page_ranges" in config:
-            pdf["page_ranges"] = config["pdf_page_ranges"]
-        if "pdf_header" in config:
-            pdf["header"] = config["pdf_header"]
-        if "pdf_footer" in config:
-            pdf["footer"] = config["pdf_footer"]
-        if "pdf_fit_one_page" in config:
-            pdf["fit_one_page"] = config["pdf_fit_one_page"]
-        if "pdf_prefer_css_page_size" in config:
-            pdf["prefer_css_page_size"] = config["pdf_prefer_css_page_size"]
+        pdf_mapping = (
+            ("pdf_paper_size", "paper"),
+            ("pdf_width", "width"),
+            ("pdf_height", "height"),
+            ("pdf_landscape", "landscape"),
+            ("pdf_scale", "scale"),
+            ("pdf_print_background", "print_background"),
+            ("pdf_page_ranges", "page_ranges"),
+            ("pdf_header", "header"),
+            ("pdf_footer", "footer"),
+            ("pdf_fit_one_page", "fit_one_page"),
+            ("pdf_prefer_css_page_size", "prefer_css_page_size"),
+            ("pdf_margin", "margin"),
+            ("pdf_margin_top", "margin_top"),
+            ("pdf_margin_right", "margin_right"),
+            ("pdf_margin_bottom", "margin_bottom"),
+            ("pdf_margin_left", "margin_left"),
+        )
+        for config_key, api_key in pdf_mapping:
+            if config_key in config:
+                pdf[api_key] = config[config_key]
         if pdf:
             params["pdf"] = pdf
 
-        # Storage (nested)
+        # Storage
         storage: Dict[str, Any] = {}
         if "storage_enabled" in config:
             storage["enabled"] = config["storage_enabled"]
@@ -941,86 +945,91 @@ class TakeOptions:
 
         return params
 
+    # Config key -> flat query parameter name read by GET /v1/screenshot.
+    _QUERY_PARAM_NAMES = (
+        ("url", "url"),
+        ("html", "html"),
+        ("preset", "preset"),
+        ("device", "device"),
+        ("width", "width"),
+        ("height", "height"),
+        ("scale", "scale"),
+        ("full_page", "full_page"),
+        ("element", "selector"),
+        ("format", "format"),
+        ("quality", "quality"),
+        ("delay", "delay"),
+        ("wait_for_timeout", "timeout"),
+        ("click", "click"),
+        ("hide", "hide"),
+        ("remove", "remove"),
+        ("block_ads", "block_ads"),
+        ("block_cookie_banners", "block_cookies"),
+        ("dark_mode", "dark_mode"),
+        ("user_agent", "user_agent"),
+        ("locale", "locale"),
+        ("timezone", "timezone"),
+        ("cache_ttl", "cache_ttl"),
+        ("cache_refresh", "cache_refresh"),
+        ("pdf_paper_size", "pdf_paper"),
+        ("pdf_width", "pdf_width"),
+        ("pdf_height", "pdf_height"),
+        ("pdf_landscape", "pdf_landscape"),
+        ("pdf_scale", "pdf_scale"),
+        ("pdf_fit_one_page", "pdf_fit_one_page"),
+        ("pdf_margin", "pdf_margin"),
+        ("pdf_margin_top", "pdf_margin_top"),
+        ("pdf_margin_right", "pdf_margin_right"),
+        ("pdf_margin_bottom", "pdf_margin_bottom"),
+        ("pdf_margin_left", "pdf_margin_left"),
+        ("pdf_print_background", "pdf_print_background"),
+        ("pdf_prefer_css_page_size", "pdf_prefer_css_page_size"),
+        ("pdf_page_ranges", "pdf_page_ranges"),
+        ("pdf_header", "pdf_header"),
+        ("pdf_footer", "pdf_footer"),
+    )
+
+    def to_flat_params(self) -> Dict[str, str]:
+        """Convert to flat query parameters (for GET requests and signed URLs).
+
+        Only options that ``GET /v1/screenshot`` reads from the query string are
+        included. Booleans become ``"true"``/``"false"`` and lists are joined with
+        commas. Options that the GET endpoint does not support (for example
+        ``mobile``, ``wait_for``, ``wait_for_selector``, ``block_trackers``,
+        network, storage) are left out; use ``Client.take()`` (POST) for those.
+
+        Returns:
+            Dictionary of query parameter names to string values.
+        """
+        config: Dict[str, Any] = self._config  # type: ignore[assignment]
+        params: Dict[str, str] = {}
+        for config_key, param_name in self._QUERY_PARAM_NAMES:
+            if config_key not in config or config[config_key] is None:
+                continue
+            params[param_name] = _flat_value(config[config_key])
+        return params
+
     def to_query_string(self) -> str:
         """Convert to URL query string (for GET requests).
 
         This method converts the configuration to flat query parameters
-        suitable for GET requests.
+        suitable for GET requests. Keys are sorted and values are encoded the
+        same way as signed URLs (space becomes ``+``).
 
         Returns:
             URL-encoded query string.
         """
-        params: Dict[str, str] = {}
-        config = self._config
+        params = self.to_flat_params()
+        return "&".join(
+            f"{quote_plus(key, safe='')}={quote_plus(params[key], safe='')}"
+            for key in sorted(params)
+        )
 
-        # Target
-        if "url" in config:
-            params["url"] = config["url"]
 
-        # Viewport (flat for GET)
-        if "width" in config:
-            params["width"] = str(config["width"])
-        if "height" in config:
-            params["height"] = str(config["height"])
-        if "scale" in config:
-            params["scale"] = str(config["scale"])
-        if "mobile" in config:
-            params["mobile"] = str(config["mobile"]).lower()
-
-        # Capture
-        if "full_page" in config:
-            params["full_page"] = str(config["full_page"]).lower()
-        if "element" in config:
-            params["element"] = config["element"]
-        if "format" in config:
-            params["format"] = config["format"]
-        if "quality" in config:
-            params["quality"] = str(config["quality"])
-
-        # Wait
-        if "wait_for" in config:
-            params["wait_for"] = config["wait_for"]
-        if "delay" in config:
-            params["delay"] = str(config["delay"])
-        if "wait_for_selector" in config:
-            params["wait_for_selector"] = config["wait_for_selector"]
-        if "wait_for_timeout" in config:
-            params["wait_for_timeout"] = str(config["wait_for_timeout"])
-
-        # Presets
-        if "preset" in config:
-            params["preset"] = config["preset"]
-        if "device" in config:
-            params["device"] = config["device"]
-
-        # Blocking
-        if "block_ads" in config:
-            params["block_ads"] = str(config["block_ads"]).lower()
-        if "block_trackers" in config:
-            params["block_trackers"] = str(config["block_trackers"]).lower()
-        if "block_cookie_banners" in config:
-            params["block_cookie_banners"] = str(config["block_cookie_banners"]).lower()
-        if "block_chat_widgets" in config:
-            params["block_chat_widgets"] = str(config["block_chat_widgets"]).lower()
-
-        # Browser emulation
-        if "dark_mode" in config:
-            params["dark_mode"] = str(config["dark_mode"]).lower()
-        if "reduced_motion" in config:
-            params["reduced_motion"] = str(config["reduced_motion"]).lower()
-        if "media_type" in config:
-            params["media_type"] = config["media_type"]
-        if "user_agent" in config:
-            params["user_agent"] = config["user_agent"]
-        if "timezone" in config:
-            params["timezone"] = config["timezone"]
-        if "locale" in config:
-            params["locale"] = config["locale"]
-
-        # Cache
-        if "cache_ttl" in config:
-            params["cache_ttl"] = str(config["cache_ttl"])
-        if "cache_refresh" in config:
-            params["cache_refresh"] = str(config["cache_refresh"]).lower()
-
-        return urlencode(params)
+def _flat_value(value: Any) -> str:
+    """Convert an option value to its flat query-string form."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return ",".join(str(v) for v in value)
+    return str(value)

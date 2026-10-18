@@ -161,6 +161,25 @@ class TestParseWebhook:
         assert event["data"]["error"]["message"] == "Page timed out"
         assert event["data"]["error"]["code"] == "render_failed"
 
+    def test_parse_screenshot_failed_with_error_code(self):
+        """The error code comes from data.error_code (real ScreenshotWebhookService payload)."""
+        payload = json.loads(
+            """
+            {"event": "screenshot.failed", "id": "req_abc",
+             "timestamp": "2026-10-18T12:00:00Z",
+             "data": {"url": "https://example.com", "error": "Navigation timed out",
+                      "error_code": "timeout"}}
+            """
+        )
+
+        event = parse_webhook(payload)
+
+        assert event["type"] == "screenshot.failed"
+        assert event["id"] == "req_abc"
+        assert event["data"]["url"] == "https://example.com"
+        assert event["data"]["error"] == {"code": "timeout", "message": "Navigation timed out"}
+        assert event["data"]["raw"]["error_code"] == "timeout"
+
     def test_parse_batch_completed(self):
         """Test parsing batch.completed event."""
         payload = {
@@ -176,6 +195,24 @@ class TestParseWebhook:
 
         assert event["type"] == "batch.completed"
         assert event["data"]["batch_id"] == "batch_789"
+        assert event["data"]["summary"] == {"total": 10, "completed": 10, "failed": 0}
+
+    def test_parse_real_batch_payload(self):
+        """Parse the JSON body that WebhookDeliveryService sends."""
+        payload = (
+            '{"event":"batch.completed","id":"batch_abc","timestamp":"2026-10-18T12:00:00Z",'
+            '"data":{"summary":{"total":2,"completed":1,"failed":1},'
+            '"results_url":"https://api.renderscreenshot.com/v1/batch/batch_abc"}}'
+        )
+
+        event = parse_webhook(payload)
+
+        assert event["type"] == "batch.completed"
+        assert event["id"] == "batch_abc"
+        assert event["data"]["batch_id"] == "batch_abc"
+        assert event["data"]["summary"]["failed"] == 1
+        assert event["data"]["results_url"] == "https://api.renderscreenshot.com/v1/batch/batch_abc"
+        assert event["timestamp"].year == 2026
 
     def test_parse_batch_failed(self):
         """Test parsing batch.failed event."""

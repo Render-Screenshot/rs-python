@@ -7,6 +7,7 @@ import hashlib
 import hmac
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union, overload
+from urllib.parse import quote_plus
 
 import httpx
 
@@ -25,7 +26,7 @@ from .types import (
 DEFAULT_BASE_URL = "https://api.renderscreenshot.com"
 DEFAULT_TIMEOUT = 30.0
 API_VERSION = "v1"
-SDK_VERSION = "1.0.0"
+SDK_VERSION = "1.0.1"
 
 
 class Client:
@@ -50,13 +51,17 @@ class Client:
         *,
         base_url: Optional[str] = None,
         timeout: Optional[float] = None,
+        signing_key: Optional[str] = None,
+        public_key_id: Optional[str] = None,
     ) -> None:
         """Create a new RenderScreenshot client.
 
         Args:
-            api_key: Your API key (rs_live_* or rs_test_*).
+            api_key: Your live API key (rs_live_*).
             base_url: Base URL for the API (optional, defaults to production).
             timeout: Request timeout in seconds (optional, defaults to 30).
+            signing_key: Secret signing key (rs_secret_*) used by generate_url (optional).
+            public_key_id: Public key ID (rs_pub_*) used by generate_url (optional).
 
         Raises:
             ValueError: If API key is empty.
@@ -69,11 +74,19 @@ class Client:
             ...     base_url="https://api.staging.renderscreenshot.com",
             ...     timeout=60.0,
             ... )
+            >>> # With signed URL credentials:
+            >>> client = Client(
+            ...     "rs_live_xxxxx",
+            ...     signing_key="rs_secret_xxxxx",
+            ...     public_key_id="rs_pub_xxxxx",
+            ... )
         """
         if not api_key:
             raise ValueError("API key is required")
 
         self._api_key = api_key
+        self._signing_key = signing_key
+        self._public_key_id = public_key_id
         self._base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
         self._timeout = timeout or DEFAULT_TIMEOUT
         self._http_client: Optional[httpx.Client] = None
@@ -127,6 +140,7 @@ class Client:
         *,
         body: Optional[Dict[str, Any]] = None,
         response_type: str = "json",
+        headers: Optional[Dict[str, str]] = None,
     ) -> Any:
         """Make an authenticated request to the API.
 
@@ -135,6 +149,7 @@ class Client:
             path: API path (e.g., "/screenshot").
             body: Request body for POST/PUT requests.
             response_type: Expected response type ("json" or "buffer").
+            headers: Extra request headers (optional).
 
         Returns:
             Parsed JSON response or bytes.
@@ -146,6 +161,8 @@ class Client:
             kwargs: Dict[str, Any] = {}
             if body is not None:
                 kwargs["json"] = body
+            if headers:
+                kwargs["headers"] = headers
 
             response = self._client.request(method, path, **kwargs)
 
@@ -187,22 +204,41 @@ class Client:
     def generate_url(
         self,
         options: Union[TakeOptions, TakeOptionsConfig],
-        expires_at: datetime,
+        expires_at: Union[datetime, int],
+        *,
+        signing_key: Optional[str] = None,
+        public_key_id: Optional[str] = None,
     ) -> str:
-        """Generate a signed URL for embedding screenshots.
+        """Generate a signed URL for the GET screenshot endpoint.
 
-        Signed URLs can be used in <img> tags or shared publicly.
-        They don't require API key authentication but expire at the specified time.
+        Signed URLs can be used in <img> tags or shared publicly. They don't
+        need an API key, but they expire at the specified time (max 30 days).
+        Signing needs your public key ID (rs_pub_*) and secret signing key
+        (rs_secret_*), not your live API key. Pass them to ``Client()`` or
+        directly to this method.
+
+        Only options that ``GET /v1/screenshot`` supports are included (see
+        ``TakeOptions.to_flat_params()``).
 
         Args:
             options: Screenshot options (TakeOptions instance or config dict).
-            expires_at: Expiration time for the signed URL (max 30 days).
+            expires_at: Expiration time (datetime or Unix timestamp in seconds).
+            signing_key: Override the client's signing key (rs_secret_*).
+            public_key_id: Override the client's public key ID (rs_pub_*).
 
         Returns:
             Signed URL string.
 
+        Raises:
+            RenderScreenshotError: If signing_key or public_key_id is missing.
+
         Example:
             >>> from datetime import datetime, timedelta
+            >>> client = Client(
+            ...     "rs_live_xxxxx",
+            ...     signing_key="rs_secret_xxxxx",
+            ...     public_key_id="rs_pub_xxxxx",
+            ... )
             >>> options = TakeOptions.url("https://example.com").preset("og_card")
             >>> url = client.generate_url(
             ...     options,
@@ -210,66 +246,37 @@ class Client:
             ... )
             >>> # Use in HTML: <img src="{url}" />
         """
-        config = options.to_config() if isinstance(options, TakeOptions) else options
+        secret = signing_key or self._signing_key
+        key_id = public_key_id or self._public_key_id
+        if not secret or not key_id:
+            raise RenderScreenshotError.invalid_request(
+                "Signed URLs require signing_key (rs_secret_*) and public_key_id (rs_pub_*). "
+                "Pass them to Client() or to generate_url() directly."
+            )
 
-        # Build query params from config
-        params: Dict[str, str] = {}
+        take_options = (
+            options if isinstance(options, TakeOptions) else TakeOptions.from_config(options)
+        )
+        expires = expires_at if isinstance(expires_at, int) else int(expires_at.timestamp())
 
-        if "url" in config:
-            params["url"] = str(config["url"])
-        if "width" in config:
-            params["width"] = str(config["width"])
-        if "height" in config:
-            params["height"] = str(config["height"])
-        if "scale" in config:
-            params["scale"] = str(config["scale"])
-        if "mobile" in config:
-            params["mobile"] = str(config["mobile"]).lower()
-        if "full_page" in config:
-            params["full_page"] = str(config["full_page"]).lower()
-        if "element" in config:
-            params["element"] = str(config["element"])
-        if "format" in config:
-            params["format"] = str(config["format"])
-        if "quality" in config:
-            params["quality"] = str(config["quality"])
-        if "preset" in config:
-            params["preset"] = str(config["preset"])
-        if "device" in config:
-            params["device"] = str(config["device"])
-        if "wait_for" in config:
-            params["wait_for"] = str(config["wait_for"])
-        if "delay" in config:
-            params["delay"] = str(config["delay"])
-        if "block_ads" in config:
-            params["block_ads"] = str(config["block_ads"]).lower()
-        if "block_trackers" in config:
-            params["block_trackers"] = str(config["block_trackers"]).lower()
-        if "block_cookie_banners" in config:
-            params["block_cookie_banners"] = str(config["block_cookie_banners"]).lower()
-        if "block_chat_widgets" in config:
-            params["block_chat_widgets"] = str(config["block_chat_widgets"]).lower()
-        if "dark_mode" in config:
-            params["dark_mode"] = str(config["dark_mode"]).lower()
-        if "cache_ttl" in config:
-            params["cache_ttl"] = str(config["cache_ttl"])
+        params = take_options.to_flat_params()
+        params["expires"] = str(expires)
+        params["key_id"] = key_id
 
-        # Sort params alphabetically and create canonical string
-        sorted_keys = sorted(params.keys())
-        canonical = "&".join(f"{k}={params[k]}" for k in sorted_keys)
+        # Canonical query string: sorted keys, CGI.escape-style encoding
+        # (matches Rails `request.query_parameters.except("signature").to_query`).
+        query = "&".join(
+            f"{quote_plus(key, safe='')}={quote_plus(params[key], safe='')}"
+            for key in sorted(params)
+        )
 
-        # Add expiration
-        expires = int(expires_at.timestamp())
-        message = f"{canonical}&expires={expires}"
-
-        # Generate signature
         signature = hmac.new(
-            self._api_key.encode("utf-8"),
-            message.encode("utf-8"),
+            secret.encode("utf-8"),
+            query.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
 
-        return f"{self._base_url}/{API_VERSION}/screenshot?{message}&signature={signature}"
+        return f"{self._base_url}/{API_VERSION}/screenshot?{query}&signature={signature}"
 
     def take(self, options: Union[TakeOptions, TakeOptionsConfig]) -> bytes:
         """Take a screenshot and return the binary data.
@@ -311,16 +318,21 @@ class Client:
         Example:
             >>> options = TakeOptions.url("https://example.com").preset("og_card")
             >>> response = client.take_json(options)
-            >>> print(f"Screenshot URL: {response['url']}")
-            >>> print(f"Size: {response['width']}x{response['height']}")
+            >>> print(f"Screenshot URL: {response['image']['url']}")
+            >>> print(f"Size: {response['image']['width']}x{response['image']['height']}")
+            >>> print(f"Cache hit: {response.get('cache', {}).get('hit')}")
         """
         params = (
             options.to_params()
             if isinstance(options, TakeOptions)
             else TakeOptions.from_config(options).to_params()
         )
-        params["response_type"] = "json"
-        return self._request("POST", "/screenshot", body=params)
+        return self._request(
+            "POST",
+            "/screenshot",
+            body=params,
+            headers={"Accept": "application/json"},
+        )
 
     @overload
     def batch(
@@ -379,6 +391,9 @@ class Client:
                     if isinstance(options, TakeOptions)
                     else TakeOptions.from_config(options).to_params()
                 )
+                # The target URLs come from `urls`; drop any placeholder target.
+                opts.pop("url", None)
+                opts.pop("html", None)
             body = {"urls": url_list, "options": opts}
         else:
             # List of request items

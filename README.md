@@ -18,7 +18,7 @@ The package is not on PyPI yet. Until it is, install it from GitHub.
 ```python
 from renderscreenshot import Client, TakeOptions
 
-# Initialize client
+# Initialize client with your live API key
 client = Client("rs_live_xxxxx")
 
 # Take a screenshot
@@ -137,10 +137,22 @@ pdf = client.take(options)
 response = client.take_json(
     TakeOptions.url("https://example.com").preset("og_card")
 )
-print(f"Screenshot URL: {response['url']}")
-print(f"Size: {response['width']}x{response['height']}")
-print(f"File size: {response['size']} bytes")
+print(f"Request ID: {response['id']}")  # req_...
+image = response["image"]
+print(f"Screenshot URL: {image['url']}")
+print(f"Size: {image['width']}x{image['height']}")
+print(f"File size: {image['size']} bytes")
+
+# Optional sections
+cache = response.get("cache", {})
+print(f"Cache hit: {cache.get('hit')}, key: {cache.get('key')}")
+usage = response.get("usage", {})
+print(f"Credits used: {usage.get('credits')}, remaining: {usage.get('remaining')}")
 ```
+
+The response has `id`, `status`, `image` (`url`, `width`, `height`, `size`,
+`format`), and optional `metadata`, `cache` (`hit`, `key`, `url`, `expires_at`)
+and `usage` (`credits`, `remaining`) objects.
 
 ### Batch Processing
 
@@ -164,18 +176,45 @@ print(f"Completed: {status['completed']}/{status['total']}")
 
 ### Signed URLs
 
+Signed URLs call the `GET /v1/screenshot` render endpoint without an API key,
+so you can put them in `<img>` tags or `og:image` meta tags. Signing needs your
+public key ID (`rs_pub_...`) and your secret signing key (`rs_secret_...`) from
+the dashboard. Your live API key is not used for signing. Keep the secret key on
+your server.
+
 ```python
 from datetime import datetime, timedelta
 
-# Generate a signed URL that expires in 24 hours
+client = Client(
+    "rs_live_xxxxx",
+    signing_key="rs_secret_xxxxx",
+    public_key_id="rs_pub_xxxxx",
+)
+
+# Generate a signed URL that expires in 24 hours (max 30 days)
 options = TakeOptions.url("https://example.com").preset("og_card")
 signed_url = client.generate_url(
     options,
-    datetime.now() + timedelta(hours=24)
+    datetime.now() + timedelta(hours=24),
+)
+
+# Or pass the credentials per call
+signed_url = client.generate_url(
+    options,
+    datetime.now() + timedelta(hours=24),
+    signing_key="rs_secret_xxxxx",
+    public_key_id="rs_pub_xxxxx",
 )
 
 # Use in HTML: <img src="{signed_url}" />
 ```
+
+`generate_url()` raises `RenderScreenshotError` (code `invalid_request`) when
+`signing_key` or `public_key_id` is missing. A signed URL only carries the
+options that the GET endpoint reads (target, viewport size and scale, preset,
+device, `full_page`, `element`, format, quality, delay, timeout, click, hide,
+remove, ad and cookie-banner blocking, dark mode, user agent, locale, timezone,
+cache and PDF options). Use `client.take()` for all other options.
 
 ### Cache Management
 
@@ -216,9 +255,22 @@ def handle_webhook(request):
     if event["type"] == "screenshot.completed":
         response = event["data"]["response"]
         print(f"Screenshot ready: {response['url']}")
+    elif event["type"] == "screenshot.failed":
+        error = event["data"]["error"]
+        print(f"Failed ({error['code']}): {error['message']}")
+    elif event["type"] in ("batch.completed", "batch.failed"):
+        print(f"Batch {event['data']['batch_id']}: {event['data'].get('summary')}")
 
     return "OK", 200
 ```
+
+### Request Format
+
+`take()`, `take_json()` and `batch()` send the nested JSON body that the API
+expects (for example `{"viewport": {"width": 1200}, "output": {"format": "png"}}`).
+`TakeOptions.to_params()` returns this body. `TakeOptions.to_query_string()` and
+`TakeOptions.to_flat_params()` return the flat query parameters for
+`GET /v1/screenshot`. `take_json()` sends `Accept: application/json`.
 
 ### Context Manager
 
@@ -250,7 +302,7 @@ with Client("rs_live_xxxxx") as client:
 - `wait_for(str)` - Wait condition: `load`, `networkidle`, `domcontentloaded`
 - `delay(int)` - Additional delay in milliseconds
 - `wait_for_selector(str)` - Wait for CSS selector to appear
-- `wait_for_timeout(int)` - Maximum wait time in milliseconds
+- `wait_for_timeout(int)` - Maximum wait time in seconds (1-60)
 
 ### Presets
 - `preset(str)` - Use preset: `og_card`, `twitter_card`, `full_page`, etc.

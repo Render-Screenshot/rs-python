@@ -44,16 +44,22 @@ from .types import (
     Preset,
     PresetInfo,
     PurgeResult,
+    ScreenshotCache,
+    ScreenshotImage,
+    ScreenshotMetadata,
     ScreenshotResponse,
+    ScreenshotUsage,
     StorageAcl,
     TakeOptionsConfig,
     WaitCondition,
+    WebhookBatchSummary,
     WebhookEvent,
     WebhookEventType,
+    WebhookScreenshot,
 )
 from .webhooks import extract_webhook_headers, parse_webhook, verify_webhook
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 __all__ = [
     "BatchImage",
@@ -75,13 +81,19 @@ __all__ = [
     "PresetInfo",
     "PurgeResult",
     "RenderScreenshotError",
+    "ScreenshotCache",
+    "ScreenshotImage",
+    "ScreenshotMetadata",
     "ScreenshotResponse",
+    "ScreenshotUsage",
     "StorageAcl",
     "TakeOptions",
     "TakeOptionsConfig",
     "WaitCondition",
+    "WebhookBatchSummary",
     "WebhookEvent",
     "WebhookEventType",
+    "WebhookScreenshot",
     "__version__",
     "extract_webhook_headers",
     "parse_webhook",

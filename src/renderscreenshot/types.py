@@ -176,19 +176,64 @@ class TakeOptionsConfig(TypedDict, total=False):
     storage_acl: StorageAcl
 
 
-class ScreenshotResponse(TypedDict, total=False):
-    """Screenshot response from take_json."""
+class ScreenshotImage(TypedDict, total=False):
+    """Image details in a screenshot response (keys can be missing)."""
 
     url: str
-    cache_url: str
     width: int
     height: int
-    format: ImageFormat
     size: int
-    cache_key: str
-    ttl: int
-    cached: bool
-    storage_path: str
+    format: ImageFormat
+
+
+class ScreenshotMetadata(TypedDict, total=False):
+    """Page metadata in a screenshot response."""
+
+    title: str
+
+
+class ScreenshotCache(TypedDict, total=False):
+    """Cache details in a screenshot response."""
+
+    hit: bool
+    key: str
+    url: str
+    expires_at: str
+
+
+class ScreenshotUsage(TypedDict, total=False):
+    """Credit usage in a screenshot response."""
+
+    credits: int
+    remaining: int
+
+
+class ScreenshotResponse(TypedDict, total=False):
+    """JSON response from ``take_json()`` (``POST /v1/screenshot``).
+
+    Example::
+
+        {
+            "id": "req_ab12cd34",
+            "status": "completed",
+            "image": {"url": "...", "width": 1200, "height": 630, "size": 12345, "format": "png"},
+            "metadata": {"title": "Screenshot"},
+            "cache": {"hit": False, "key": "...", "url": "...", "expires_at": "..."},
+            "usage": {"credits": 1, "remaining": 99},
+        }
+
+    ``metadata``, ``cache`` and ``usage`` are optional. A request with a
+    ``webhook`` returns ``{"id": "job_...", "status": "processing", "webhook": {...}}``
+    with HTTP 202.
+    """
+
+    id: str
+    status: str
+    image: ScreenshotImage
+    metadata: ScreenshotMetadata
+    cache: ScreenshotCache
+    usage: ScreenshotUsage
+    webhook: Dict[str, Any]
 
 
 class BatchRequestItem(TypedDict, total=False):
@@ -206,7 +251,7 @@ BatchItemStatus = Literal["pending", "processing", "completed", "failed"]
 
 
 class BatchError(TypedDict):
-    """Error details in a webhook event."""
+    """Error details in a webhook event (``code`` comes from ``data.error_code``)."""
 
     code: str
     message: str
@@ -295,13 +340,35 @@ WebhookEventType = Literal[
 ]
 
 
+class WebhookScreenshot(TypedDict, total=False):
+    """Screenshot details in a ``screenshot.completed`` webhook event."""
+
+    url: str
+    width: int
+    height: int
+    format: str
+    size: int
+    cached: bool
+
+
+class WebhookBatchSummary(TypedDict, total=False):
+    """Batch counts in a ``batch.completed`` / ``batch.failed`` webhook event."""
+
+    total: int
+    completed: int
+    failed: int
+
+
 class WebhookEventData(TypedDict, total=False):
     """Webhook event data."""
 
     url: str
     batch_id: str
-    response: ScreenshotResponse
+    response: WebhookScreenshot
     error: BatchError
+    summary: WebhookBatchSummary
+    results_url: str
+    raw: Dict[str, Any]
 
 
 class WebhookEvent(TypedDict):

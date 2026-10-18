@@ -440,7 +440,7 @@ class TestTakeOptionsToParams:
         params = options.to_params()
 
         assert params["pdf"] == {
-            "paper_size": "a4",
+            "paper": "a4",
             "landscape": True,
             "margin": "1in",
         }
@@ -461,14 +461,79 @@ class TestTakeOptionsToParams:
             "acl": "public-read",
         }
 
-    def test_flat_options(self):
-        """Test flat options are not nested."""
-        options = TakeOptions.url("https://example.com").block_ads().dark_mode().delay(1000)
+    def test_grouped_options(self):
+        """Test options are grouped into the nested POST JSON shape."""
+        options = (
+            TakeOptions.url("https://example.com")
+            .block_ads()
+            .block_cookie_banners()
+            .dark_mode()
+            .delay(1000)
+            .full_page()
+            .format("webp")
+            .quality(80)
+            .wait_for("networkidle")
+            .wait_for_selector("#ready")
+            .cache_ttl(3600)
+            .cache_refresh()
+            .device("iphone_14_pro")
+            .preset("og_card")
+        )
         params = options.to_params()
 
-        assert params["block_ads"] is True
-        assert params["dark_mode"] is True
-        assert params["delay"] == 1000
+        assert params == {
+            "url": "https://example.com",
+            "preset": "og_card",
+            "device": "iphone_14_pro",
+            "capture": {"mode": "full_page"},
+            "output": {"format": "webp", "quality": 80},
+            "wait": {"until": "networkidle", "delay": 1000, "for_selector": "#ready"},
+            "block": {"ads": True, "cookie_banners": True},
+            "browser": {"dark_mode": True},
+            "cache": {"ttl": 3600, "refresh": True},
+        }
+
+    def test_no_flat_keys_in_post_body(self):
+        """No legacy flat keys leak into the POST body."""
+        options = (
+            TakeOptions.url("https://example.com")
+            .element("#hero")
+            .block_ads()
+            .dark_mode()
+            .media_type("print")
+            .block_urls(["*.ads.com"])
+            .inject_script("console.log(1)")
+            .auth_bearer("tok")
+            .headers({"X-Test": "1"})
+        )
+        params = options.to_params()
+
+        for flat_key in (
+            "element",
+            "block_ads",
+            "dark_mode",
+            "media_type",
+            "block_urls",
+            "inject_script",
+            "auth_bearer",
+            "headers",
+            "full_page",
+            "format",
+        ):
+            assert flat_key not in params
+        assert params["capture"] == {"selector": "#hero"}
+        assert params["block"] == {"ads": True, "requests": ["*.ads.com"]}
+        assert params["browser"] == {"dark_mode": True, "media": "print"}
+        assert params["page"] == {"scripts": ["console.log(1)"]}
+        assert params["network"] == {
+            "headers": {"X-Test": "1"},
+            "auth": {"type": "bearer", "token": "tok"},
+        }
+
+    def test_auth_basic(self):
+        """Basic auth is nested under network.auth."""
+        params = TakeOptions.url("https://example.com").auth_basic("u", "p").to_params()
+        assert params["network"]["auth"] == {"type": "basic", "username": "u", "password": "p"}
 
 
 class TestTakeOptionsToQueryString:
@@ -497,3 +562,33 @@ class TestTakeOptionsToQueryString:
 
         # URL should be encoded
         assert "example.com" in query
+
+    def test_get_param_names(self):
+        """Flat params use the names GET /v1/screenshot reads."""
+        options = (
+            TakeOptions.url("https://example.com")
+            .full_page()
+            .element("#main")
+            .block_cookie_banners()
+            .wait_for_timeout(5000)
+            .hide([".a", ".b"])
+            .pdf_paper_size("a4")
+            .pdf_landscape(False)
+        )
+        params = options.to_flat_params()
+
+        assert params == {
+            "url": "https://example.com",
+            "full_page": "true",
+            "selector": "#main",
+            "block_cookies": "true",
+            "timeout": "5000",
+            "hide": ".a,.b",
+            "pdf_paper": "a4",
+            "pdf_landscape": "false",
+        }
+
+    def test_query_string_sorted_and_plus_encoded(self):
+        """Query string keys are sorted and spaces encode as '+'."""
+        query = TakeOptions.url("https://example.com/a b").width(1200).to_query_string()
+        assert query == "url=https%3A%2F%2Fexample.com%2Fa+b&width=1200"

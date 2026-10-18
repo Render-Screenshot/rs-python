@@ -281,7 +281,11 @@ class TestSignedUrlsDocs:
     def test_generate_signed_url_with_sdk(self):
         """Test signed URL generation with SDK example."""
         # From docs: signed-urls.html.markerb - Python (with SDK)
-        client = Client("rs_live_xxxxx")
+        client = Client(
+            "rs_live_xxxxx",
+            signing_key="rs_secret_xxxxx",
+            public_key_id="rs_pub_xxxxx",
+        )
 
         # Generate a signed URL that expires in 24 hours
         signed_url = client.generate_url(
@@ -341,10 +345,23 @@ class TestPythonSdkDocs:
         """Test take_json example."""
         httpx_mock.add_response(
             json={
-                "url": "https://cdn.example.com/screenshot.png",
-                "width": 1200,
-                "height": 630,
-                "cached": False,
+                "id": "req_ab12cd34ef56ab78",
+                "status": "completed",
+                "image": {
+                    "url": "https://cdn.renderscreenshot.com/abc.png",
+                    "width": 1200,
+                    "height": 630,
+                    "size": 12345,
+                    "format": "png",
+                },
+                "metadata": {"title": "Screenshot"},
+                "cache": {
+                    "hit": False,
+                    "key": "screenshots/abc.png",
+                    "url": "https://cdn.renderscreenshot.com/abc.png",
+                    "expires_at": "2026-10-19T12:00:00Z",
+                },
+                "usage": {"credits": 1, "remaining": 99},
             }
         )
 
@@ -353,12 +370,15 @@ class TestPythonSdkDocs:
 
         response = client.take_json(TakeOptions.url("https://example.com").preset("og_card"))
 
-        print(response["url"])  # CDN URL
-        print(response["width"])  # 1200
-        print(response["height"])  # 630
-        print(response["cached"])  # True/False
+        print(response["id"])  # req_...
+        print(response["image"]["url"])  # CDN URL
+        print(response["image"]["width"])  # 1200
+        print(response["image"]["height"])  # 630
+        print(response["cache"]["hit"])  # True/False
+        print(response["usage"]["remaining"])  # Credits left
 
-        assert response["width"] == 1200
+        assert response["image"]["width"] == 1200
+        assert response["cache"]["hit"] is False
         client.close()
 
     def test_context_manager(self, httpx_mock):

@@ -49,12 +49,23 @@ class TestQuickStartExamples:
         """Test JSON response example from docs."""
         httpx_mock.add_response(
             json={
-                "url": "https://cdn.renderscreenshot.com/abc.png",
-                "width": 1200,
-                "height": 630,
-                "format": "png",
-                "size": 12345,
-                "cached": False,
+                "id": "req_ab12cd34ef56ab78",
+                "status": "completed",
+                "image": {
+                    "url": "https://cdn.renderscreenshot.com/abc.png",
+                    "width": 1200,
+                    "height": 630,
+                    "size": 12345,
+                    "format": "png",
+                },
+                "metadata": {"title": "Screenshot"},
+                "cache": {
+                    "hit": False,
+                    "key": "screenshots/abc.png",
+                    "url": "https://cdn.renderscreenshot.com/abc.png",
+                    "expires_at": "2026-10-19T12:00:00Z",
+                },
+                "usage": {"credits": 1, "remaining": 99},
             }
         )
 
@@ -63,9 +74,9 @@ class TestQuickStartExamples:
         options = TakeOptions.url("https://example.com").preset("og_card")
         response = client.take_json(options)
 
-        assert "url" in response
-        assert response["width"] == 1200
-        assert response["height"] == 630
+        assert response["image"]["url"] == "https://cdn.renderscreenshot.com/abc.png"
+        assert response["image"]["width"] == 1200
+        assert response["image"]["height"] == 630
         client.close()
 
     def test_client_context_manager(self, httpx_mock):
