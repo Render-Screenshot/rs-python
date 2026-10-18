@@ -342,6 +342,7 @@ with Client("rs_live_xxxxx") as client:
 ### Cache
 - `cache_ttl(int)` - Cache TTL in seconds
 - `cache_refresh(bool)` - Force cache refresh
+- `cache_available(bool)` - Reuse an identical cached render inside the TTL (0 credits). Without it every request renders a fresh screenshot
 
 ### PDF (when format is "pdf")
 - `pdf_paper_size(str)` - Paper size: `a4`, `letter`, etc.

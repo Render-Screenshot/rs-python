@@ -151,6 +151,7 @@ class TakeOptionsConfig(TypedDict, total=False):
     # Cache
     cache_ttl: int
     cache_refresh: bool
+    cache_available: bool
 
     # PDF options
     pdf_paper_size: PdfPaperSize

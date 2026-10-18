@@ -548,6 +548,19 @@ class TakeOptions:
         """
         return self._copy_with(cache_refresh=value)
 
+    def cache_available(self, value: bool = True) -> "TakeOptions":
+        """Serve a previous screenshot with the same options when one exists.
+
+        The API reuses a cached render (cache.available) only when this is set.
+
+        Args:
+            value: True to allow reuse of a cached render.
+
+        Returns:
+            A new TakeOptions instance.
+        """
+        return self._copy_with(cache_available=value)
+
     # --- PDF options ---
 
     def pdf_paper_size(self, value: PdfPaperSize) -> "TakeOptions":
@@ -903,6 +916,8 @@ class TakeOptions:
             cache["ttl"] = config["cache_ttl"]
         if "cache_refresh" in config:
             cache["refresh"] = config["cache_refresh"]
+        if "cache_available" in config:
+            cache["available"] = config["cache_available"]
         if cache:
             params["cache"] = cache
 
@@ -971,6 +986,7 @@ class TakeOptions:
         ("timezone", "timezone"),
         ("cache_ttl", "cache_ttl"),
         ("cache_refresh", "cache_refresh"),
+        ("cache_available", "cache_available"),
         ("pdf_paper_size", "pdf_paper"),
         ("pdf_width", "pdf_width"),
         ("pdf_height", "pdf_height"),

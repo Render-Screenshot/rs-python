@@ -304,6 +304,29 @@ class TestTakeOptionsCache:
         options = TakeOptions.url("https://example.com").cache_refresh()
         assert options.to_config()["cache_refresh"] is True
 
+    def test_cache_available(self):
+        """Test cache available."""
+        options = TakeOptions.url("https://example.com").cache_available()
+        assert options.to_config()["cache_available"] is True
+
+    def test_cache_available_in_post_params(self):
+        """cache_available is sent as cache.available in POST bodies."""
+        params = TakeOptions.url("https://example.com").cache_available().to_params()
+        assert params["cache"] == {"available": True}
+
+    def test_cache_available_in_query_params(self):
+        """cache_available is sent as cache_available in GET / signed URLs."""
+        options = TakeOptions.url("https://example.com").cache_available()
+        assert options.to_flat_params()["cache_available"] == "true"
+        assert "cache_available=true" in options.to_query_string()
+
+    def test_cache_available_is_immutable_and_can_be_disabled(self):
+        """cache_available returns a copy and accepts False."""
+        base = TakeOptions.url("https://example.com")
+        off = base.cache_available().cache_available(False)
+        assert "cache_available" not in base.to_config()
+        assert off.to_params()["cache"] == {"available": False}
+
 
 class TestTakeOptionsPdf:
     """Tests for PDF options."""

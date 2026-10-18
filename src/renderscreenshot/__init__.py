@@ -59,7 +59,7 @@ from .types import (
 )
 from .webhooks import extract_webhook_headers, parse_webhook, verify_webhook
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 __all__ = [
     "BatchImage",
