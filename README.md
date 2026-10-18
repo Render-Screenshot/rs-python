@@ -377,6 +377,8 @@ except RenderScreenshotError as e:
     print(f"Error: {e.message}")
     print(f"Code: {e.code}")
     print(f"HTTP Status: {e.http_status}")
+    print(f"Param: {e.param}")  # e.g. "url" for validation errors
+    print(f"Request ID: {e.request_id}")
 
     if e.retryable:
         if e.retry_after:

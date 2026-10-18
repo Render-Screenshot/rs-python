@@ -1,5 +1,7 @@
 """Tests for error handling."""
 
+from typing import Any, ClassVar, Dict
+
 import pytest
 
 from renderscreenshot.errors import RETRYABLE_ERRORS, RenderScreenshotError
@@ -171,3 +173,57 @@ class TestRenderScreenshotError:
         """Test that the correct error codes are marked as retryable."""
         expected_retryable = {"rate_limited", "timeout", "render_failed", "internal_error"}
         assert expected_retryable == RETRYABLE_ERRORS
+
+
+class TestNestedErrorBody:
+    """Tests for the nested ``{"error": {...}, "request_id": ...}`` API error body."""
+
+    NESTED_BODY: ClassVar[Dict[str, Any]] = {
+        "error": {
+            "type": "validation_error",
+            "code": "invalid_url",
+            "message": "The URL is not valid",
+            "param": "url",
+            "retryable": False,
+            "docs": "https://docs.renderscreenshot.com/errors/invalid_url",
+        },
+        "request_id": "req_abc123",
+    }
+
+    def test_from_response_nested_body(self):
+        """Test that the nested error object supplies code, message and details."""
+        error = RenderScreenshotError.from_response(400, self.NESTED_BODY)
+
+        assert error.http_status == 400
+        assert error.code == "invalid_url"
+        assert error.message == "The URL is not valid"
+        assert error.type == "validation_error"
+        assert error.param == "url"
+        assert error.request_id == "req_abc123"
+        assert error.docs == "https://docs.renderscreenshot.com/errors/invalid_url"
+        assert error.retryable is False
+        assert str(error) == "[invalid_url] The URL is not valid"
+
+    def test_from_response_nested_retryable_code(self):
+        """Test that retryable follows the error code for nested bodies."""
+        body = {
+            "error": {"type": "rate_limit_error", "code": "rate_limited", "message": "Slow down"},
+            "request_id": "req_1",
+        }
+        error = RenderScreenshotError.from_response(429, body, retry_after=30)
+
+        assert error.code == "rate_limited"
+        assert error.retryable is True
+        assert error.retry_after == 30
+
+    def test_from_response_flat_error_string(self):
+        """Test the older flat ``{"error": "message", "code": ...}`` body."""
+        error = RenderScreenshotError.from_response(
+            400, {"error": "Bad thing", "code": "invalid_request"}
+        )
+
+        assert error.code == "invalid_request"
+        assert error.message == "Bad thing"
+        assert error.type is None
+        assert error.param is None
+        assert error.request_id is None

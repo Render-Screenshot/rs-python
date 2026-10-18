@@ -627,3 +627,35 @@ class TestClientErrorHandling:
         assert exc_info.value.http_status == 500
         assert exc_info.value.retryable is True
         client.close()
+
+    def test_handles_nested_api_error_body(self, httpx_mock):
+        """Test that the real nested API error body is parsed."""
+        httpx_mock.add_response(
+            status_code=400,
+            json={
+                "error": {
+                    "type": "validation_error",
+                    "code": "invalid_url",
+                    "message": "The URL is not valid",
+                    "param": "url",
+                    "retryable": False,
+                    "docs": "https://docs.renderscreenshot.com/errors/invalid_url",
+                },
+                "request_id": "req_abc123",
+            },
+        )
+
+        client = Client("rs_live_test123")
+
+        with pytest.raises(RenderScreenshotError) as exc_info:
+            client.take(TakeOptions.url("notaurl"))
+
+        error = exc_info.value
+        assert error.http_status == 400
+        assert error.code == "invalid_url"
+        assert error.message == "The URL is not valid"
+        assert error.type == "validation_error"
+        assert error.param == "url"
+        assert error.request_id == "req_abc123"
+        assert error.retryable is False
+        client.close()

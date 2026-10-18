@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cache_available=true` in GET / signed URLs, so the API can reuse an identical cached
   render inside the cache TTL. Without it every request renders a fresh screenshot.
 
+### Fixed
+
+- `RenderScreenshotError` now reads the nested API error body
+  (`{"error": {"type", "code", "message", "param", ...}, "request_id"}`). Before this fix,
+  `code` was always `internal_error` and `message` was the raw dict. The error also exposes
+  `type`, `param`, `request_id` and `docs`. Flat `{"code", "message"}` / `{"error": "..."}`
+  bodies still work.
+
 ## [1.0.1] - 2026-10-18
 
 ### Fixed
